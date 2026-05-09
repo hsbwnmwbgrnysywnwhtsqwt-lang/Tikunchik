@@ -1,0 +1,61 @@
+name: Build Tikunchik Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'TikunchikDesktop/**'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r TikunchikDesktop/requirements.txt
+          pip install pyinstaller
+
+      - name: Build exe
+        run: |
+          cd TikunchikDesktop
+          pyinstaller --onefile --windowed --name Tikunchik tikunchik.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tikunchik-Windows
+          path: TikunchikDesktop/dist/Tikunchik.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xdotool xclip libenchant-2-dev
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r TikunchikDesktop/requirements.txt
+          pip install pyinstaller pyenchant
+
+      - name: Build binary
+        run: |
+          cd TikunchikDesktop
+          pyinstaller --onefile --name tikunchik tikunchik.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tikunchik-Linux
+          path: TikunchikDesktop/dist/tikunchik

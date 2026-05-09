@@ -37,16 +37,27 @@ enum ConverterLogic {
     )
 
     private static var isProcessing = false
+    private static var processingStartTime: Date?
 
     static func fixInPlace(delay: TimeInterval = 0) {
         fixInPlace(delay: delay, switchInputLanguage: false)
     }
 
     static func fixInPlace(delay: TimeInterval = 0, switchInputLanguage: Bool) {
-        guard !isProcessing else { return }
+        if isProcessing {
+            if let start = processingStartTime, Date().timeIntervalSince(start) > 5 {
+                isProcessing = false
+            } else {
+                return
+            }
+        }
         isProcessing = true
+        processingStartTime = Date()
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + delay) {
-            defer { isProcessing = false }
+            defer {
+                isProcessing = false
+                processingStartTime = nil
+            }
             performFixInPlace(switchInputLanguage: switchInputLanguage)
         }
     }
@@ -80,7 +91,7 @@ enum ConverterLogic {
             guard converted.text != originalText else { return }
             if replaceText(in: context, with: converted.text) {
                 if switchInputLanguage {
-                    switchToNextKeyboardInputSource()
+                    DispatchQueue.main.async { switchToNextKeyboardInputSource() }
                 }
                 postNotification(converted.text)
                 return
@@ -138,8 +149,10 @@ enum ConverterLogic {
         simulateKeystroke(keyCode: 9, flags: .maskCommand) // Cmd+V
         Thread.sleep(forTimeInterval: 0.1)
 
+        restore(savedClipboard)
+
         if switchInputLanguage {
-            switchToNextKeyboardInputSource()
+            DispatchQueue.main.async { switchToNextKeyboardInputSource() }
         }
 
         postNotification(converted.text)
@@ -160,93 +173,106 @@ enum ConverterLogic {
 
     // MARK: - Conversion
 
+    private static func checkSpelling(of text: String, language: String) -> Bool {
+        let work = { () -> Bool in
+            let range = NSSpellChecker.shared.checkSpelling(
+                of: text, startingAt: 0, language: language,
+                wrap: false, inSpellDocumentWithTag: 0, wordCount: nil
+            )
+            return range.location == NSNotFound
+        }
+        if Thread.isMainThread {
+            return work()
+        }
+        var result = false
+        DispatchQueue.main.sync { result = work() }
+        return result
+    }
+
     private static func isEnglishWord(_ token: String) -> Bool {
         let stripped = token.trimmingCharacters(in: .punctuationCharacters)
         guard stripped.count >= 2 else { return false }
-        let range = NSSpellChecker.shared.checkSpelling(
-            of: stripped, startingAt: 0, language: "en",
-            wrap: false, inSpellDocumentWithTag: 0, wordCount: nil
-        )
-        return range.location == NSNotFound
+        return checkSpelling(of: stripped, language: "en")
+    }
+
+    private static func isHebrewWord(_ token: String) -> Bool {
+        let stripped = token.trimmingCharacters(in: .punctuationCharacters)
+        guard stripped.count >= 2 else { return false }
+        return checkSpelling(of: stripped, language: "he")
+    }
+
+    private static func normalizedText(from text: String) -> ConversionResult {
+        convertText(text)
     }
 
     private static func convertText(_ text: String) -> ConversionResult {
-        var result = ""
+        var parts: [(text: String, isWord: Bool)] = []
         var word = ""
         for char in text {
             if char.isWhitespace {
                 if !word.isEmpty {
-                    let conversion = convertToken(word)
-                    result += conversion.text
+                    parts.append((word, true))
                     word = ""
                 }
-                result.append(char)
+                parts.append((String(char), false))
             } else {
                 word.append(char)
             }
         }
         if !word.isEmpty {
-            let conversion = convertToken(word)
-            result += conversion.text
+            parts.append((word, true))
         }
-        return ConversionResult(text: result)
-    }
 
-    private static func normalizedText(from text: String) -> ConversionResult {
-        let converted = convertText(text)
-        return ConversionResult(text: applySpellCorrection(to: converted.text))
-    }
+        let wordParts = parts.filter(\.isWord)
+        var clearConvertCount = 0
 
-    private static func convertToken(_ token: String) -> ConversionResult {
-        switch dominantScript(in: token) {
-        case .latin:
-            if isEnglishWord(token) {
-                return ConversionResult(text: token)
+        for part in wordParts {
+            let script = dominantScript(in: part.text)
+            switch script {
+            case .latin:
+                let hebrew = mapCharacters(in: part.text, using: mapping)
+                if isHebrewWord(hebrew) || !isEnglishWord(part.text) {
+                    clearConvertCount += 1
+                }
+            case .hebrew:
+                if !isHebrewWord(part.text) {
+                    clearConvertCount += 1
+                }
+            case .unknown:
+                break
             }
-            return ConversionResult(text: mapCharacters(in: token, using: mapping))
-        case .hebrew:
-            return ConversionResult(text: mapCharacters(in: token, using: reverseMapping))
-        case .unknown:
-            return ConversionResult(text: token)
         }
-    }
 
-    private static func applySpellCorrection(to text: String) -> String {
-        let nsText = text as NSString
-        let checker = NSSpellChecker.shared
-        let tag = NSSpellChecker.uniqueSpellDocumentTag()
-        defer { checker.closeSpellDocument(withTag: tag) }
+        let majorityConverting = clearConvertCount > wordParts.count / 2
 
-        var corrected = text
-        let words = nsText.enumerateWordRanges()
-
-        for range in words.reversed() {
-            let token = (corrected as NSString).substring(with: range)
-            guard let language = languageForSpellCorrection(of: token) else { continue }
-
-            let misspelledRange = checker.checkSpelling(
-                of: token,
-                startingAt: 0,
-                language: language,
-                wrap: false,
-                inSpellDocumentWithTag: tag,
-                wordCount: nil
-            )
-
-            guard misspelledRange.location != NSNotFound else { continue }
-            guard let suggestions = checker.guesses(
-                forWordRange: NSRange(location: 0, length: (token as NSString).length),
-                in: token,
-                language: language,
-                inSpellDocumentWithTag: tag
-            ), let suggestion = suggestions.first, !suggestion.isEmpty else {
+        var result = ""
+        for part in parts {
+            guard part.isWord else {
+                result += part.text
                 continue
             }
 
-            corrected = (corrected as NSString).replacingCharacters(in: range, with: suggestion)
+            let script = dominantScript(in: part.text)
+            switch script {
+            case .latin:
+                let hebrew = mapCharacters(in: part.text, using: mapping)
+                if isHebrewWord(hebrew) || !isEnglishWord(part.text) || majorityConverting {
+                    result += hebrew
+                } else {
+                    result += part.text
+                }
+            case .hebrew:
+                if isHebrewWord(part.text) {
+                    result += part.text
+                } else {
+                    result += mapCharacters(in: part.text, using: reverseMapping)
+                }
+            case .unknown:
+                result += part.text
+            }
         }
 
-        return corrected
+        return ConversionResult(text: result)
     }
 
     // MARK: - Helpers
@@ -331,17 +357,6 @@ enum ConverterLogic {
         return supportedRoles.contains(role)
     }
 
-    private static func languageForSpellCorrection(of token: String) -> String? {
-        switch dominantScript(in: token) {
-        case .latin:
-            return "en"
-        case .hebrew:
-            return "he"
-        case .unknown:
-            return nil
-        }
-    }
-
     private static func dominantScript(in token: String) -> TokenScript {
         var latinCount = 0
         var hebrewCount = 0
@@ -380,13 +395,23 @@ enum ConverterLogic {
     }
 
     private static func switchToNextKeyboardInputSource() {
-        let sources = TISCreateInputSourceList(nil, false).takeRetainedValue() as NSArray
-        let selectableSources = sources.map { unsafeBitCast($0, to: TISInputSource.self) }.filter(isSelectableInputSource)
-        guard !selectableSources.isEmpty else { return }
+        guard let cfSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() else { return }
+        let count = CFArrayGetCount(cfSources)
+        guard count > 0 else { return }
 
-        let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
-        let currentSourceID = currentSource.flatMap(inputSourceID(for:))
-        let currentIndex = selectableSources.firstIndex { inputSourceID(for: $0) == currentSourceID } ?? -1
+        var selectableSources: [TISInputSource] = []
+        for i in 0..<count {
+            guard let ptr = CFArrayGetValueAtIndex(cfSources, i) else { continue }
+            let source = Unmanaged<TISInputSource>.fromOpaque(ptr).takeUnretainedValue()
+            if isSelectableInputSource(source) {
+                selectableSources.append(source)
+            }
+        }
+        guard selectableSources.count > 1 else { return }
+
+        let current = TISCopyCurrentKeyboardInputSource().takeRetainedValue()
+        let currentID = inputSourceID(for: current)
+        let currentIndex = selectableSources.firstIndex { inputSourceID(for: $0) == currentID } ?? -1
         let nextIndex = (currentIndex + 1) % selectableSources.count
         TISSelectInputSource(selectableSources[nextIndex])
     }
@@ -467,7 +492,7 @@ enum ConverterLogic {
 
     private static func postNotification(_ text: String) {
         let content = UNMutableNotificationContent()
-        content.title = "MishmishSwitcher"
+        content.title = "תיקונצ'יק"
         let preview = text.prefix(80)
         content.body = "תוקן: \(preview)\(text.count > 80 ? "…" : "")"
         content.sound = .default

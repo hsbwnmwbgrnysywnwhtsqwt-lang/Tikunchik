@@ -7,19 +7,23 @@ struct TikunchikApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("MishmishSwitcher", systemImage: "keyboard.fill") {
+        MenuBarExtra("Tikunchik", image: "MenuBarIcon") {
             Button("Fix Text  ⌃⇧K") {
                 ConverterLogic.fixInPlace(delay: 0.3)
             }
-            Button("Convert Clipboard") {
-                ConverterLogic.processClipboard()
+            Button("Fix + Switch Language  ⌃⌥Space") {
+                ConverterLogic.fixInPlace(delay: 0.3, switchInputLanguage: true)
             }
             Divider()
-            Button("הגדרות...") {
+            Toggle("Open at Login", isOn: Binding(
+                get: { LaunchAtLogin.isEnabled },
+                set: { LaunchAtLogin.isEnabled = $0 }
+            ))
+            Button("Settings...") {
                 appDelegate.showSetupWindow()
             }
             Divider()
-            Button("Quit MishmishSwitcher") {
+            Button("Quit Tikunchik") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
@@ -60,12 +64,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func showSetupWindow() {
         if setupWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 480, height: 520),
+                contentRect: NSRect(x: 0, y: 0, width: 480, height: 640),
                 styleMask: [.titled, .closable],
                 backing: .buffered,
                 defer: false
             )
-            window.title = "MishmishSwitcher — הגדרות"
+            window.title = "תיקונצ'יק — הגדרות"
             window.contentViewController = NSHostingController(rootView: SetupView())
             window.center()
             setupWindow = window

@@ -12,11 +12,38 @@ struct SetupView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
 
-            Text("MishmishSwitcher")
+            Text("תיקונצ'יק")
                 .font(.largeTitle.bold())
 
-            Text("צריך כמה הרשאות לפני שמתחילים")
+            Text("מתקן טקסט שהוקלד בשפה הלא נכונה")
                 .foregroundStyle(.secondary)
+
+            Divider()
+
+            // Usage Instructions
+            VStack(alignment: .leading, spacing: 6) {
+                Text("איך להשתמש:").font(.headline)
+                HStack(alignment: .top, spacing: 8) {
+                    Text("⌃⇧K").font(.system(.caption, design: .monospaced)).bold()
+                    Text("סמן טקסט ולחץ לתיקון במקום")
+                        .font(.caption)
+                }
+                HStack(alignment: .top, spacing: 8) {
+                    Text("⌃⌥Space").font(.system(.caption, design: .monospaced)).bold()
+                    Text("תיקון טקסט + החלפת שפת מקלדת")
+                        .font(.caption)
+                }
+                HStack(alignment: .top, spacing: 8) {
+                    Text("תפריט").font(.system(.caption, design: .monospaced)).bold()
+                    Text("לחץ על האייקון בשורת התפריט לאפשרויות נוספות")
+                        .font(.caption)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.3))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal)
 
             Divider()
 
@@ -103,7 +130,7 @@ struct SetupView: View {
             .controlSize(.large)
         }
         .padding(32)
-        .frame(width: 480, height: accessibilityGranted ? 400 : 520)
+        .frame(width: 480, height: accessibilityGranted ? 520 : 640)
         .onAppear(perform: checkPermissions)
         .task {
             while !Task.isCancelled {
