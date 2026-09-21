@@ -70,6 +70,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 defer: false
             )
             window.title = "תיקונצ'יק — הגדרות"
+            // Keep the window's lifetime tied to `setupWindow`. By default AppKit
+            // releases a programmatically-created window when it is closed, which
+            // would leave `setupWindow` dangling and crash the next time Settings
+            // is opened.
+            window.isReleasedWhenClosed = false
             window.contentViewController = NSHostingController(rootView: SetupView())
             window.center()
             setupWindow = window

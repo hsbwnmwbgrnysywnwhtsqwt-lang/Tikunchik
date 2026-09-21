@@ -1,0 +1,12 @@
+# Secrets — never commit signing/notarization credentials
+private_keys/
+*.p8
+
+# Build & distribution artifacts
+dist/
+build/
+DerivedData/
+*.xcarchive
+
+# macOS
+.DS_Store

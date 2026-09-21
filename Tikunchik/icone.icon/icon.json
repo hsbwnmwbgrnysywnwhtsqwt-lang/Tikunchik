@@ -1,0 +1,43 @@
+{
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.34954,0.45317,0.73682,1.00000"
+  },
+  "groups" : [
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "icon_dark_512@2x.png",
+          "name" : "icon_dark_512@2x",
+          "position" : {
+            "scale" : 0.9,
+            "translation-in-points" : [
+              15.735190751554683,
+              -20.799231878999365
+            ]
+          }
+        }
+      ],
+      "refractivity" : {
+        "depth" : 1,
+        "enabled" : false,
+        "strength" : 1
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.6
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.2
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

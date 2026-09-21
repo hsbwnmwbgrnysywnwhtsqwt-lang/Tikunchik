@@ -5,9 +5,18 @@ import UserNotifications
 struct SetupView: View {
     @State private var accessibilityGranted = false
     @State private var notificationsGranted = false
+    private var isFirstLaunch: Bool {
+        !UserDefaults.standard.bool(forKey: "setupCompleted")
+    }
 
     var body: some View {
         VStack(spacing: 20) {
+            if isFirstLaunch {
+                Text("!ברוך הבא")
+                    .font(.title2.bold())
+                    .foregroundStyle(.tint)
+            }
+
             Image(systemName: "keyboard.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(.tint)
